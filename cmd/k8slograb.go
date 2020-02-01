@@ -33,13 +33,16 @@ func main() {
     }
 
     for podEvent := range pods.ResultChan() {
-        //fmt.Printf("%+v: ", podEvent.Type)
         if podEvent.Type == watch.Added || podEvent.Type == watch.Modified {
             pod, ok := podEvent.Object.(*corev1.Pod)
             if ok {
                 for _, containerStatus := range pod.Status.ContainerStatuses {
                     if containerStatus.Ready {
-                        go followContainerLogs(client, pod, containerStatus.Name)
+                        go func() {
+                            if err := followContainerLogs(client, pod, containerStatus.Name); err != nil {
+                                fmt.Printf("failed when following the logs of [%s][%s]", pod.Name, containerStatus.Name)
+                            }
+                        }()
                     }
                 }
             }
@@ -48,6 +51,8 @@ func main() {
 }
 
 func followContainerLogs(client *kubernetes.Clientset, pod *corev1.Pod, containerName string) error {
+    logFilename := constructLogFilename(pod, containerName)
+
     stream, err := client.CoreV1().Pods(namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream()
     defer func() {
         if stream != nil {
@@ -60,7 +65,6 @@ func followContainerLogs(client *kubernetes.Clientset, pod *corev1.Pod, containe
         return err
     }
 
-    logFilename := constructLogFilename(pod, containerName)
     fmt.Printf("logging pod [%s] container [%s] into [%s]\n", pod.Name, containerName, logFilename)
     logfile, err := os.Create(logFilename)
     defer func() {
@@ -123,13 +127,13 @@ func createClent() *kubernetes.Clientset {
     // use the current context in kubeconfig
     config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
     if err != nil {
-        panic(err.Error())
+        panic(err)
     }
 
     // create the clientset
     clientset, err := kubernetes.NewForConfig(config)
     if err != nil {
-        panic(err.Error())
+        panic(err)
     }
 
     return clientset
