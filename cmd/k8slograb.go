@@ -33,7 +33,7 @@ func main() {
     }
 
     for podEvent := range pods.ResultChan() {
-        fmt.Printf("%+v: ", podEvent.Type)
+        //fmt.Printf("%+v: ", podEvent.Type)
         if podEvent.Type == watch.Added || podEvent.Type == watch.Modified {
             pod, ok := podEvent.Object.(*corev1.Pod)
             if ok {
@@ -44,11 +44,10 @@ func main() {
                 }
             }
         }
-        fmt.Println()
     }
 }
 
-func followContainerLogs(client *kubernetes.Clientset, pod *corev1.Pod, containerName string) {
+func followContainerLogs(client *kubernetes.Clientset, pod *corev1.Pod, containerName string) error {
     stream, err := client.CoreV1().Pods(namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Follow: true, Container: containerName}).Stream()
     defer func() {
         if stream != nil {
@@ -58,32 +57,40 @@ func followContainerLogs(client *kubernetes.Clientset, pod *corev1.Pod, containe
         }
     }()
     if err != nil {
-        panic(err)
+        return err
     }
 
     logFilename := constructLogFilename(pod, containerName)
-    fmt.Printf("logging into [%s]\n", logFilename)
+    fmt.Printf("logging pod [%s] container [%s] into [%s]\n", pod.Name, containerName, logFilename)
     logfile, err := os.Create(logFilename)
-    defer logfile.Close()
+    defer func() {
+        if logfile != nil {
+            if err := logfile.Close(); err != nil {
+                fmt.Printf("unable to close logfile [%s]\n", err.Error())
+            }
+        }
+    }()
     if err != nil {
-        panic(err)
+        return err
     }
 
     r := bufio.NewReader(stream)
     for {
         bytes, err := r.ReadBytes('\n')
         if _, err := logfile.Write(bytes); err != nil {
-            panic(err)
+            return err
         }
 
         if err != nil {
             if err != io.EOF {
-                panic(err)
+                return err
             }
-            fmt.Println("end here")
+            fmt.Printf("end of log pod [%s] container [%s]\n", pod.Name, containerName)
             break
         }
     }
+
+    return nil
 }
 
 func constructLogFilename(pod *corev1.Pod, containerName string) string {
@@ -93,12 +100,12 @@ func constructLogFilename(pod *corev1.Pod, containerName string) string {
 func createInClient() *kubernetes.Clientset {
     config, err := rest.InClusterConfig()
     if err != nil {
-        panic(err.Error())
+        panic(err)
     }
 
     clientset, err := kubernetes.NewForConfig(config)
     if err != nil {
-        panic(err.Error())
+        panic(err)
     }
 
     return clientset
