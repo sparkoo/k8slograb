@@ -1,4 +1,4 @@
-module github.com/sparkoo/persistlogservice
+module github.com/sparkoo/k8slograb
 
 go 1.13
 
