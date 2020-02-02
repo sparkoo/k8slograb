@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logger
+  labels:
+    app: logger
+spec:
+  selector:
+    matchLabels:
+      app: logger
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: logger
+    spec:
+      containers:
+        - name: logger
+          image: quay.io/mvala/dummylogger:latest
+          volumeMounts:
+            - mountPath: /workspace_logs
+              name: log-storage
+     volumes:
+       - name: log-storage
+         emptyDir: {}

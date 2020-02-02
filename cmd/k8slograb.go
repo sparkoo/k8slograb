@@ -17,7 +17,7 @@ import (
 
 const (
     namespace = "test"
-    outdir    = "out/logs"
+    outdir    = "/workspace_logs"
 )
 
 func main() {
