@@ -1,0 +1,6 @@
+  - env
+    - namespace (default?)
+    - pod label filter (default: none)
+    - output dir (default: logs/)
+  - deployment.yaml
+    - set env ^^
