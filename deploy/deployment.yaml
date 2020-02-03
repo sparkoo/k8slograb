@@ -14,12 +14,14 @@ spec:
       labels:
         app: logger
     spec:
+      serviceAccountName: che-workspace
       containers:
         - name: logger
-          image: quay.io/mvala/dummylogger:latest
+          image: quay.io/mvala/k8slograb:latest
+          imagePullPolicy: Always
           volumeMounts:
             - mountPath: /workspace_logs
               name: log-storage
-     volumes:
-       - name: log-storage
-         emptyDir: {}
+      volumes:
+        - name: log-storage
+          emptyDir: {}
