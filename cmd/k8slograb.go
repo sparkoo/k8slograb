@@ -17,7 +17,7 @@ import (
 )
 
 const (
-    namespace = "test"
+    namespace = "che-che"
     outdir    = "/workspace_logs"
 )
 
