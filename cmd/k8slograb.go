@@ -27,8 +27,7 @@ func main() {
     if err := os.MkdirAll(outdir, 0777); err != nil {
         panic(err)
     }
-
-    pods, err := client.CoreV1().Pods(namespace).Watch(metav1.ListOptions{})
+    pods, err := client.CoreV1().Pods(namespace).Watch(metav1.ListOptions{LabelSelector: "che.workspace_id"})
     if err != nil {
         log.Fatal(err)
     }
