@@ -11,6 +11,7 @@ import (
     "k8s.io/client-go/kubernetes"
     "k8s.io/client-go/rest"
     "k8s.io/client-go/tools/clientcmd"
+    "log"
     "os"
     "path/filepath"
 )
@@ -21,15 +22,15 @@ const (
 )
 
 func main() {
-    fmt.Println("hello")
-    client := createClent()
+    log.Println("hello")
+    client := createInClient()
     if err := os.MkdirAll(outdir, 0777); err != nil {
         panic(err)
     }
 
     pods, err := client.CoreV1().Pods(namespace).Watch(metav1.ListOptions{})
     if err != nil {
-        panic(err)
+        log.Fatal(err)
     }
 
     followers := make(map[string]bool)
@@ -42,7 +43,7 @@ func main() {
                     if containerStatus.Ready {
                         go func(pod *corev1.Pod, containerName string) {
                             if err := followContainerLogs(client, followers, pod, containerName); err != nil {
-                                fmt.Printf("failed when following the logs of [%s][%s]", pod.Name, containerStatus.Name)
+                                log.Printf("failed when following the logs of [%s][%s]", pod.Name, containerStatus.Name)
                             }
                         }(pod, containerStatus.Name)
                     }
@@ -55,7 +56,7 @@ func main() {
 func followContainerLogs(client *kubernetes.Clientset, followers map[string]bool, pod *corev1.Pod, containerName string) error {
     logFilename := constructLogFilename(pod, containerName)
     if _, follows := followers[logFilename]; follows {
-        fmt.Printf("Already following [%s]\n", logFilename)
+        log.Printf("Already following [%s]\n", logFilename)
         return nil
     }
 
@@ -65,7 +66,7 @@ func followContainerLogs(client *kubernetes.Clientset, followers map[string]bool
         clean(followers, logFilename)
         if stream != nil {
             if err := stream.Close(); err != nil {
-                fmt.Println(err)
+                log.Println(err)
             }
         }
     }()
@@ -74,13 +75,13 @@ func followContainerLogs(client *kubernetes.Clientset, followers map[string]bool
         return err
     }
 
-    fmt.Printf("logging pod [%s] container [%s] into [%s]\n", pod.Name, containerName, logFilename)
+    log.Printf("logging pod [%s] container [%s] into [%s]\n", pod.Name, containerName, logFilename)
     logfile, err := os.Create(logFilename)
     defer func() {
         clean(followers, logFilename)
         if logfile != nil {
             if err := logfile.Close(); err != nil {
-                fmt.Printf("unable to close logfile [%s]\n", err.Error())
+                log.Printf("unable to close logfile [%s]\n", err.Error())
             }
         }
     }()
@@ -102,7 +103,7 @@ func followContainerLogs(client *kubernetes.Clientset, followers map[string]bool
             if err != io.EOF {
                 return err
             }
-            fmt.Printf("end of log pod [%s] container [%s]\n", pod.Name, containerName)
+            log.Printf("end of log pod [%s] container [%s]\n", pod.Name, containerName)
             break
         }
     }
@@ -111,12 +112,12 @@ func followContainerLogs(client *kubernetes.Clientset, followers map[string]bool
 }
 
 func clean(followers map[string]bool, filename string) {
-    fmt.Printf("Cleaning follower [%s] ... ", filename)
+    log.Printf("Cleaning follower [%s] ... ", filename)
     if _, ok := followers[filename]; ok {
-        fmt.Print("done\n")
+        log.Print("done\n")
         delete(followers, filename)
     } else {
-        fmt.Print("no follower foud\n")
+        log.Print("no follower foud\n")
     }
 }
 
