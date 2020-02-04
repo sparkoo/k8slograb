@@ -21,7 +21,8 @@ spec:
           imagePullPolicy: Always
           volumeMounts:
             - mountPath: /workspace_logs
-              name: log-storage
+              name: claim-che-workspace
       volumes:
-        - name: log-storage
-          emptyDir: {}
+        - name: claim-che-workspace
+          persistentVolumeClaim:
+            claimName: claim-che-workspace

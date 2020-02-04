@@ -17,8 +17,9 @@ import (
 )
 
 const (
-    namespace = "che-che"
-    outdir    = "/workspace_logs"
+    namespace        = "che-che"
+    outdir           = "/workspace_logs"
+    workspaceIdLabel = "che.workspace_id"
 )
 
 func main() {
@@ -27,7 +28,7 @@ func main() {
     if err := os.MkdirAll(outdir, 0777); err != nil {
         panic(err)
     }
-    pods, err := client.CoreV1().Pods(namespace).Watch(metav1.ListOptions{LabelSelector: "che.workspace_id"})
+    pods, err := client.CoreV1().Pods(namespace).Watch(metav1.ListOptions{LabelSelector: workspaceIdLabel})
     if err != nil {
         log.Fatal(err)
     }
@@ -121,7 +122,7 @@ func clean(followers map[string]bool, filename string) {
 }
 
 func constructLogFilename(pod *corev1.Pod, containerName string) string {
-    return fmt.Sprintf("%s/%s_%s_%s_%s.log", outdir, namespace, pod.Name, pod.ObjectMeta.UID, containerName)
+    return fmt.Sprintf("%s/%s/%s/%s.log", outdir, pod.Labels[workspaceIdLabel], "che-logs-che-workspace-pod", containerName)
 }
 
 func createInClient() *kubernetes.Clientset {
