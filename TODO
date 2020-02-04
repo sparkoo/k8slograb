@@ -4,3 +4,4 @@
     - output dir (default: logs/)
   - deployment.yaml
     - set env ^^
+  - memory and cpu requirements?
