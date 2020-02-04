@@ -26,7 +26,7 @@ func main() {
     log.Println("hello")
     client := createInClient()
     if err := os.MkdirAll(outdir, 0777); err != nil {
-        panic(err)
+        log.Fatal(err)
     }
     pods, err := client.CoreV1().Pods(namespace).Watch(metav1.ListOptions{LabelSelector: workspaceIdLabel})
     if err != nil {
@@ -128,12 +128,12 @@ func constructLogFilename(pod *corev1.Pod, containerName string) string {
 func createInClient() *kubernetes.Clientset {
     config, err := rest.InClusterConfig()
     if err != nil {
-        panic(err)
+        log.Fatal(err)
     }
 
     clientset, err := kubernetes.NewForConfig(config)
     if err != nil {
-        panic(err)
+        log.Fatal(err)
     }
 
     return clientset
@@ -151,13 +151,13 @@ func createClent() *kubernetes.Clientset {
     // use the current context in kubeconfig
     config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
     if err != nil {
-        panic(err)
+        log.Fatal(err)
     }
 
     // create the clientset
     clientset, err := kubernetes.NewForConfig(config)
     if err != nil {
-        panic(err)
+        log.Fatal(err)
     }
 
     return clientset
