@@ -10,7 +10,7 @@ RUN go mod download
 # copy and build actual sources
 COPY cmd /go/src/cmd
 COPY pkg /go/src/pkg
-RUN OOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /go/bin/k8slograb cmd/k8slograb.go
+RUN OOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -x -o /go/bin/k8slograb cmd/k8slograb.go
 
 
 ### runtime image

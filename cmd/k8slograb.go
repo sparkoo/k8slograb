@@ -2,15 +2,19 @@ package main
 
 import (
     "bufio"
+    "bytes"
     "flag"
     "fmt"
     "io"
     corev1 "k8s.io/api/core/v1"
     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+    "k8s.io/apimachinery/pkg/runtime/schema"
     "k8s.io/apimachinery/pkg/watch"
     "k8s.io/client-go/kubernetes"
+    "k8s.io/client-go/kubernetes/scheme"
     "k8s.io/client-go/rest"
     "k8s.io/client-go/tools/clientcmd"
+    "k8s.io/client-go/tools/remotecommand"
     "log"
     "os"
     "path/filepath"
@@ -18,13 +22,15 @@ import (
 
 const (
     namespace        = "che-che"
-    outdir           = "/workspace_logs"
+    outdir           = "out/workspace_logs"
     workspaceIdLabel = "che.workspace_id"
 )
 
 func main() {
     log.Println("hello")
-    client := createInClient()
+    config := createOutConfig()
+    //client := createInClient()
+    client := createClent(config)
     if err := os.MkdirAll(outdir, 0777); err != nil {
         log.Fatal(err)
     }
@@ -42,7 +48,7 @@ func main() {
                 for _, containerStatus := range pod.Status.ContainerStatuses {
                     if containerStatus.Ready {
                         go func(pod *corev1.Pod, containerName string) {
-                            if err := followContainerLogs(client, followers, pod, containerName); err != nil {
+                            if err := followContainerLogs(client, config, followers, pod, containerName); err != nil {
                                 log.Printf("failed when following the logs of [%s][%s]", pod.Name, containerStatus.Name)
                             }
                         }(pod, containerStatus.Name)
@@ -53,7 +59,12 @@ func main() {
     }
 }
 
-func followContainerLogs(client *kubernetes.Clientset, followers map[string]bool, pod *corev1.Pod, containerName string) error {
+func followContainerLogs(client *kubernetes.Clientset, config *rest.Config, followers map[string]bool, pod *corev1.Pod, containerName string) error {
+
+    if err := grabFilelog(client, config, namespace, pod, containerName); err != nil {
+        log.Fatal(err)
+    }
+
     logFilename := constructLogFilename(pod, containerName)
     if _, follows := followers[logFilename]; follows {
         log.Printf("Already following [%s]\n", logFilename)
@@ -92,14 +103,69 @@ func followContainerLogs(client *kubernetes.Clientset, followers map[string]bool
 
     r := bufio.NewReader(stream)
     for {
-        bytes, err := r.ReadBytes('\n')
-        if _, err := logfile.Write(bytes); err != nil {
+        buffer, err := r.ReadBytes('\n')
+        if _, err := logfile.Write(buffer); err != nil {
             clean(followers, logFilename)
             return err
         }
 
         if err != nil {
             clean(followers, logFilename)
+            if err != io.EOF {
+                return err
+            }
+            log.Printf("end of log pod [%s] container [%s]\n", pod.Name, containerName)
+            break
+        }
+    }
+
+    return nil
+}
+
+func grabFilelog(client *kubernetes.Clientset, config *rest.Config, namespace string, pod *corev1.Pod, containerName string) error {
+
+    req := client.CoreV1().RESTClient().Post().Resource("pods").
+        Namespace(namespace).
+        Name(pod.Name).
+        SubResource("exec").
+        Param("container", containerName)
+    req.VersionedParams(&corev1.PodExecOptions{
+        Stdin:     false,
+        Stdout:    true,
+        Stderr:    true,
+        TTY:       true,
+        Container: containerName,
+        Command:   []string{"tail", "/workspace_logs/meh"},
+    }, scheme.ParameterCodec)
+
+    log.Printf("request [%+v]\n", req)
+
+    exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
+    if err != nil {
+        return err
+    }
+
+    log.Printf("exec [%+v]\n", exec)
+
+    var stdout, stderr bytes.Buffer
+    err = exec.Stream(remotecommand.StreamOptions{
+        Stdin:  nil,
+        Stdout: &stdout,
+        Stderr: &stderr,
+        Tty:    true,
+    })
+    if err != nil {
+        return err
+    }
+
+    log.Println("execed ? ")
+
+    r := bufio.NewReader(&stdout)
+    for {
+        buffer, err := r.ReadBytes('\n')
+        log.Print(string(buffer))
+
+        if err != nil {
             if err != io.EOF {
                 return err
             }
@@ -125,21 +191,16 @@ func constructLogFilename(pod *corev1.Pod, containerName string) string {
     return fmt.Sprintf("%s/%s/%s/%s.log", outdir, pod.Labels[workspaceIdLabel], "che-logs-che-workspace-pod", containerName)
 }
 
-func createInClient() *kubernetes.Clientset {
+func createInConfig() *rest.Config {
     config, err := rest.InClusterConfig()
     if err != nil {
         log.Fatal(err)
     }
 
-    clientset, err := kubernetes.NewForConfig(config)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    return clientset
+    return config
 }
 
-func createClent() *kubernetes.Clientset {
+func createOutConfig() *rest.Config {
     var kubeconfig *string
     if home := homeDir(); home != "" {
         kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
@@ -153,8 +214,15 @@ func createClent() *kubernetes.Clientset {
     if err != nil {
         log.Fatal(err)
     }
+    return config
+}
 
+func createClent(config *rest.Config) *kubernetes.Clientset {
     // create the clientset
+    config.GroupVersion = &schema.GroupVersion{
+        Group:   "",
+        Version: "v1",
+    }
     clientset, err := kubernetes.NewForConfig(config)
     if err != nil {
         log.Fatal(err)
